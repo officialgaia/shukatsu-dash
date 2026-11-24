@@ -119,11 +119,11 @@ function weekLabel(w) {
 function sideList(w, side, title) {
   const items = w[side] || [];
   if (!items.length) return '';
-  return `<div class="side side-${side}"><div class="side-h">${title}</div><ul class="checks">${items
+  return `<div class="group"><div class="group-h">${title}</div><ul class="checks">${items
     .map((t, i) => {
       const id = weekItemId(w.start, side, i);
       const on = S.isWeekChecked(id);
-      return `<li><button class="chk ${on ? 'on' : ''}" data-week="${esc(id)}" aria-pressed="${on}"><span class="box"></span><span>${esc(t)}</span></button></li>`;
+      return `<li><button class="chk ${on ? 'on' : ''}" data-week="${esc(id)}" aria-pressed="${on}"><span class="box" aria-hidden="true"></span><span>${esc(t)}</span></button></li>`;
     })
     .join('')}</ul></div>`;
 }
@@ -148,22 +148,20 @@ function bindWeekChecks() {
 }
 
 function hoursBar(total, t) {
-  if (!t) return `<div class="big">${fmtH(total)}<small>時間</small></div><p class="muted small">この時期の目標は設定されていません</p>`;
-  const scaleMax = Math.max(t.max * 1.2, total);
+  if (!t) return `<p class="hours"><b>${fmtH(total)}</b> 時間</p>`;
+  const scaleMax = Math.max(t.max, total);
   const pct = (v) => `${Math.min(100, (v / scaleMax) * 100)}%`;
-  let status, cls;
-  if (total >= t.min) { status = '目標達成'; cls = 'good'; }
-  else if (total >= t.floor) { status = `最低ライン達成・目標まであと${fmtH(t.min - total)}時間`; cls = 'ok'; }
-  else { status = `最低ライン（${t.floor}時間）まであと${fmtH(t.floor - total)}時間`; cls = 'low'; }
+  let note;
+  if (total >= t.min) note = '目標に届きました';
+  else if (total >= t.floor) note = `目標まであと ${fmtH(t.min - total)} 時間`;
+  else note = `最低ライン ${t.floor} 時間まであと ${fmtH(t.floor - total)} 時間`;
   return `
-    <div class="big">${fmtH(total)}<small>時間 / 目標 ${t.min}〜${t.max}</small></div>
-    <div class="hbar" role="img" aria-label="今週${fmtH(total)}時間、目標${t.min}〜${t.max}時間">
-      <div class="band" style="left:${pct(t.min)};width:calc(${pct(t.max)} - ${pct(t.min)})"></div>
-      <div class="fill ${cls}" style="width:${pct(total)}"></div>
-      <div class="floor" style="left:${pct(t.floor)}"></div>
+    <p class="hours"><b>${fmtH(total)}</b> / ${t.min}〜${t.max} 時間</p>
+    <div class="bar" role="img" aria-label="今週${fmtH(total)}時間、目標${t.min}〜${t.max}時間">
+      <div class="bar-fill" style="width:${pct(total)}"></div>
+      <div class="bar-tick" style="left:${pct(t.min)}"></div>
     </div>
-    <div class="hbar-legend"><span><i class="lg-band"></i>目標 ${t.min}〜${t.max}h（${esc(t.label)}）</span><span><i class="lg-floor"></i>最低 ${t.floor}h</span></div>
-    <p class="status ${cls}">${status}</p>`;
+    <p class="muted small">${note}</p>`;
 }
 
 // ---------- ホーム ----------
@@ -171,73 +169,51 @@ function home() {
   const day = today();
   const w = currentWeek(plan, day);
   const mon = mondayOf(day);
-  const days = weekDays(mon);
-  const total = S.sumHours(days);
+  const total = S.sumHours(weekDays(mon));
   const t = targetFor(plan, mon);
   const left = daysBetween(day, plan.examDate);
   const daily = S.getDaily(day);
   const banners = activeDecisions(plan, day);
+  const [, m, d] = day.split('-').map(Number);
 
   const countdown = left > 0
-    ? `<div class="count"><span class="muted">${esc(plan.examName)}まで</span><div class="big">あと<b>${left}</b>日</div><span class="muted small">${plan.examDate.replace(/-/g, '/')}（${dow(plan.examDate)}）</span></div>`
-    : left === 0
-      ? `<div class="count"><div class="big"><b>今日が本番</b></div><span class="muted small">体調第一で。</span></div>`
-      : `<div class="count"><div class="big">試験は終了</div><span class="muted small">${plan.examDate.replace(/-/g, '/')} から ${-left}日</span></div>`;
+    ? `都庁まで <b>${left}</b> 日`
+    : left === 0 ? '<b>今日が本番</b>' : '試験は終了しました';
 
-  const weekHead = w
-    ? `<div class="card-h"><h2>今週のテーマ</h2><span class="pill">${esc(w.month)}・${esc(w.phase)}</span></div>
-       <p class="muted small">${weekLabel(w)}${w.note ? `（${esc(w.note)}）` : ''}${w.kind === 'upcoming' ? '　※まもなく開始' : ''}</p>`
-    : '<h2>今週のテーマ</h2>';
-
-  const sunday = isSunday(day);
-
-  const syncSetup = Sync.isConfigured() || S.getSetting('hideSyncHint', false)
-    ? ''
-    : `<a class="hint" href="#/settings"><b>同期の設定がまだです</b><span>設定でアクセストークンを入力すると、データがクラウドに保存されます ›</span></a>`;
-
+  const notices = [];
+  for (const b of banners) notices.push(`<p class="notice"><b>${esc(b.title)}</b>　${esc(b.text)}</p>`);
   const dv = device();
-  const iosHint = dv.ios && !dv.standalone
-    ? `<a class="hint" href="#/settings"><b>ホーム画面に追加して使ってください</b><span>iPhone は、ホーム画面に追加したアプリでないと通知を受け取れません。共有ボタン（□に↑）→「ホーム画面に追加」›</span></a>`
-    : '';
+  if (dv.ios && !dv.standalone) notices.push('<a class="notice link-row" href="#/settings">ホーム画面に追加して使ってください <span>›</span></a>');
+  if (!Sync.isConfigured()) notices.push('<a class="notice link-row" href="#/settings">同期を設定する <span>›</span></a>');
+  if (reviewAvailable()) notices.push('<a class="notice link-row strong" href="#/review">AIと振り返る <span>›</span></a>');
 
   return `
-    ${banners.map((b) => `<div class="banner" role="note"><b>${esc(b.title)}</b><span>${esc(b.text)}</span></div>`).join('')}
-    ${iosHint}
-    ${syncSetup}
-    ${reviewAvailable() ? `<a class="review-cta" href="#/review"><b>AIと振り返る</b><span>${sunday ? '日曜の振り返り（5分）' : '今週の振り返り'} ›</span></a>` : ''}
-    <section class="card">${countdown}</section>
+    <header class="today-head">
+      <p class="muted">${m}月${d}日（${dow(day)}）</p>
+      <p class="countdown">${countdown}</p>
+    </header>
+    ${notices.join('')}
 
-    <section class="card">
-      ${weekHead}
-      ${w ? weekBody(w) : '<p class="muted">該当する週がありません</p>'}
-    </section>
-
-    <section class="card">
-      <div class="card-h"><h2>今日のチェック</h2><span class="muted small">${mdDow(day)}</span></div>
-      <div class="today-checks">
+    <section class="sec">
+      <h2>今日</h2>
+      <ul class="checks">
         ${plan.dailyChecks.map((c) => `
-          <button class="today-btn ${daily[c.id] ? 'on' : ''}" data-daily="${c.id}" aria-pressed="${!!daily[c.id]}">
-            <span class="tick" aria-hidden="true"></span>
-            <span><b>${esc(c.label)}</b><small>${esc(c.sub || '')}</small></span>
-          </button>`).join('')}
-      </div>
-      <div class="week-dots" aria-label="今週の達成状況">
-        ${days.map((d) => {
-          const v = S.getDaily(d);
-          return `<div class="wd ${d === day ? 'is-today' : ''}"><span>${dow(d)}</span>${plan.dailyChecks
-            .map((c) => `<i class="${v[c.id] ? 'on' : ''}" title="${esc(c.label)}"></i>`).join('')}</div>`;
-        }).join('')}
-      </div>
-      <p class="muted small">上の点：${esc(plan.dailyChecks[0].label)}　下の点：${esc(plan.dailyChecks[1].label)}</p>
+          <li><button class="chk ${daily[c.id] ? 'on' : ''}" data-daily="${c.id}" aria-pressed="${!!daily[c.id]}">
+            <span class="box" aria-hidden="true"></span><span>${esc(c.label)}</span></button></li>`).join('')}
+      </ul>
     </section>
 
-    <section class="card">
-      <div class="card-h"><h2>今週の勉強時間</h2><a class="link" href="#/record">記録する ›</a></div>
+    <section class="sec">
+      <h2>今週${w ? `<span class="h-sub">${weekLabel(w)}・${esc(w.phase)}</span>` : ''}</h2>
+      ${w ? weekBody(w) : '<p class="muted">予定がありません</p>'}
+    </section>
+
+    <section class="sec">
+      <h2>勉強時間<a class="h-link" href="#/record">記録する</a></h2>
       ${hoursBar(total, t)}
     </section>
 
     ${lastReviewCard()}
-    <p class="foot muted small">${esc(plan.dailyBase)}</p>
   `;
 }
 
@@ -247,7 +223,7 @@ function lastReviewCard() {
   if (!lr?.next?.length) return '';
   // 振り返った週の翌週が今週のときだけ出す
   if (addDays(lr.week, 7) !== mondayOf(today())) return '';
-  return `<section class="card next-card"><h2>今週やること（前回の振り返りより）</h2><ol>${lr.next.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></section>`;
+  return `<section class="sec"><h2>前回の振り返りで決めたこと</h2><ol class="plain-ol">${lr.next.map((x) => `<li>${esc(x)}</li>`).join('')}</ol></section>`;
 }
 
 const bind = {};
@@ -273,8 +249,7 @@ function record() {
   }
 
   return `
-    <section class="card">
-      <div class="card-h"><h2>勉強時間を記録</h2></div>
+    <section class="sec">
       <div class="day-pick">
         <button class="icon-btn" data-shift="-1" aria-label="前の日">‹</button>
         <label class="date-wrap"><input type="date" id="recDate" value="${recordDay}" max="${day}"><span>${mdDow(recordDay)}${recordDay === day ? '・今日' : ''}</span></label>
@@ -285,13 +260,13 @@ function record() {
         <div class="step-val"><b>${fmtH(cur.h)}</b><small>時間</small></div>
         <button class="step" data-step="0.5" aria-label="0.5時間増やす">＋</button>
       </div>
-      <div class="quick">${[1, 2, 3, 4, 5, 8].map((h) => `<button class="chip" data-set="${h}">${h}h</button>`).join('')}</div>
-      <p class="muted small">科目タグ（任意）</p>
-      <div class="tags">${plan.studyTags.map((t) => `<button class="chip ${cur.tags.includes(t) ? 'on' : ''}" data-tag="${esc(t)}" aria-pressed="${cur.tags.includes(t)}">${esc(t)}</button>`).join('')}</div>
+      <details class="more" ${cur.tags.length || S.getSetting('tagsOpen', false) ? 'open' : ''} id="tagBox"><summary>科目を付ける${cur.tags.length ? `：${esc(cur.tags.join('・'))}` : '（任意）'}</summary>
+        <div class="tags">${plan.studyTags.map((t) => `<button class="chip ${cur.tags.includes(t) ? 'on' : ''}" data-tag="${esc(t)}" aria-pressed="${cur.tags.includes(t)}">${esc(t)}</button>`).join('')}</div>
+      </details>
     </section>
 
-    <section class="card">
-      <div class="card-h"><h2>この週（${md(mon)}〜）</h2><span class="muted small">合計 ${fmtH(S.sumHours(days))}h</span></div>
+    <section class="sec">
+      <h2>${md(mon)}〜の週<span class="h-sub">合計 ${fmtH(S.sumHours(days))} 時間</span></h2>
       <ul class="daylist">
         ${days.map((d) => {
           const h = S.getHours(d);
@@ -303,8 +278,8 @@ function record() {
       </ul>
     </section>
 
-    <section class="card">
-      <div class="card-h"><h2>週ごとの勉強時間</h2></div>
+    <section class="sec">
+      <h2>週ごとの合計</h2>
       ${weeklyChart(series, plan.studyTargets.floor.hours, lastMon)}
       <details class="table-view"><summary>表で見る</summary>
         <table><thead><tr><th>週</th><th>合計</th><th>目標</th></tr></thead><tbody>
@@ -330,6 +305,7 @@ bind.record = () => {
     S.setHours(recordDay, Math.min(24, c.h + Number(b.dataset.step)), c.tags);
   }));
   app.querySelectorAll('[data-set]').forEach((b) => b.addEventListener('click', () => S.setHours(recordDay, Number(b.dataset.set), cur().tags)));
+  $('#tagBox')?.addEventListener('toggle', (e) => S.setSetting('tagsOpen', e.target.open));
   app.querySelectorAll('[data-tag]').forEach((b) => b.addEventListener('click', () => {
     const c = cur();
     const t = b.dataset.tag;
@@ -394,15 +370,8 @@ function companies() {
   const rankText = Object.fromEntries(plan.abc.map((x) => [x.rank, x.text]));
 
   return `
-    <div class="page-h-row"><h1 class="page-h">会社</h1><button class="btn" id="addCo">＋ 追加</button></div>
-    <section class="card stats">
-      <div><b>${active}</b><span>追っている社</span></div>
-      <div><b>${offers}</b><span>内定</span></div>
-      <div><b>${count('A')}</b><span>A</span></div>
-      <div><b>${count('B')}</b><span>B</span></div>
-      <div><b>${count('C')}</b><span>C</span></div>
-    </section>
-    <p class="muted small">目安：入口15〜20社 → 本格選考5〜10社 → 内定1〜2社</p>
+    <div class="page-h-row"><h1 class="page-h">会社</h1><button class="btn small-btn" id="addCo">追加</button></div>
+    <p class="summary">追っている ${active}社・内定 ${offers}社<span class="muted">（A ${count('A')}・B ${count('B')}・C ${count('C')}）</span></p>
     <div class="seg" role="tablist">
       ${['all', 'A', 'B', 'C'].map((r) => `<button data-filter="${r}" class="${companyFilter === r ? 'on' : ''}">${r === 'all' ? 'すべて' : r}</button>`).join('')}
     </div>
@@ -415,8 +384,9 @@ function companies() {
           <span class="stage s-${esc(c.stage)}">${esc(c.stage)}</span>
         </button></li>`).join('') : '<li class="muted empty">まだありません</li>'}
     </ul>
-    <details class="card abc-help"><summary>A・B・C の基準</summary>
-      <dl>${plan.abc.map((x) => `<dt>${x.rank}</dt><dd>${esc(x.text)}</dd>`).join('')}</dl>
+    <details class="more"><summary>A・B・C の基準</summary>
+      <dl class="tiers">${plan.abc.map((x) => `<dt>${x.rank}</dt><dd>${esc(x.text)}</dd>`).join('')}</dl>
+      <p class="muted small">目安：入口15〜20社 → 本格選考5〜10社 → 内定1〜2社</p>
     </details>
     <dialog id="coDlg"></dialog>`;
 }
