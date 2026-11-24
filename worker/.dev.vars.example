@@ -1,0 +1,12 @@
+# ローカル開発用（wrangler dev）。このファイルを .dev.vars にコピーして使う。
+# .dev.vars は .gitignore 済み。本番の値はここに書かず wrangler secret put で設定する。
+ACCESS_TOKEN=ここに長いランダムな文字列（openssl rand -base64 32 など）
+ALLOWED_ORIGINS=http://localhost:8787
+# AIコーチ：ローカルでは COACH_MOCK=1 で Claude を呼ばずに試せる。本物で試すなら 0 にして ANTHROPIC_API_KEY を入れる
+COACH_MOCK=1
+ANTHROPIC_API_KEY=
+# プッシュ通知：npm run vapid で作った鍵を入れる（本番とは別の鍵でよい）
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=https://example.github.io
+PLAN_URL=http://localhost:8787/data/plan.json

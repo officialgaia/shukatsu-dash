@@ -1,0 +1,18 @@
+# 秘密情報（絶対にコミットしない）
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+*.pem
+.env
+.env.*
+
+# Cloudflare / Node
+node_modules/
+.wrangler/
+worker/.wrangler/
+
+# OS
+.DS_Store
+
+# Claude のプレビュー設定（ローカル専用）
+.claude/

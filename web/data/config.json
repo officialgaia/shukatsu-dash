@@ -1,0 +1,4 @@
+{
+  "_説明": "Worker の URL（例：https://shukatsu-dash.<アカウント名>.workers.dev）。秘密ではないので公開されてよい。トークンはここに書かない。",
+  "apiBase": ""
+}
