@@ -12,6 +12,8 @@ COACH_MODEL = "claude-sonnet-5-5"   # モデルを変えるときはここ
 COACH_EFFORT = "low"                # low | medium | high（高いほど丁寧だが高くつく）
 COACH_MAX_TURNS = "10"              # 1回の振り返りで送れる回数の上限
 COACH_DAILY_LIMIT = "3"             # 1日に始められる振り返りの回数
+AI_DAILY_LIMIT = "40"               # AIタブ：1日に送れる回数（料金の上限の目安）
+AI_MAX_TURNS = "30"                 # AIタブ：1つの会話で送れる回数
 # プッシュ通知（M4）
 VAPID_PUBLIC_KEY = "BMtw3pBuZQRh1NS0HlCTl9UrSt0FDHhi2TiDUd5y9JGj8CuxSJ1RTg4OJWJ9Fa3SmjiYNZGJFeD7560UNKMg9lc"               # npm run vapid で作った PUBLIC を貼る（秘密ではない）
 VAPID_SUBJECT = "https://officialgaia.github.io/shukatsu-dash/"   # 送信元の連絡先（公開 URL か mailto:）

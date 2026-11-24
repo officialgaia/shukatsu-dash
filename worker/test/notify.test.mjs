@@ -32,7 +32,7 @@ test('plan が読めないときも送れる', () => {
 
 test('日曜の通知：振り返りへ誘導し、来週の判断ポイントを添える', () => {
   const m = sundayMessage(plan, '2027-02-21');
-  assert.equal(m.url, './#/review');
+  assert.equal(m.url, './#/ai/review');
   assert.match(m.body, /来週は【判断の週】/);
   assert.match(m.body, /来週（2\/22〜）/);
 });

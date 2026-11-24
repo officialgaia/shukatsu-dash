@@ -2,7 +2,7 @@
 // ・オフライン表示：同じオリジンの GET は「ネット優先、つながらなければキャッシュ」。
 //   plan.json を直したときもすぐ反映され、圏外でも前回の画面が出る。
 // ・プッシュ通知：Worker から届いた通知を表示し、タップで該当の画面を開く。
-const CACHE = 'shukatsu-v5';
+const CACHE = 'shukatsu-v6';
 const SHELL = [
   './',
   './index.html',
@@ -12,7 +12,7 @@ const SHELL = [
   './js/util.js',
   './js/chart.js',
   './js/sync.js',
-  './js/review.js',
+  './js/ai.js',
   './js/notify.js',
   './data/config.json',
   './data/plan.json',

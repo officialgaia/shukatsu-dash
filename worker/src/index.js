@@ -3,11 +3,13 @@
 //   POST /api/sync  … 端末の変更を送り、ほかの端末の変更を受け取る
 //   /api/coach/*    … AIコーチ（coach.js）
 //   /api/push/*     … プッシュ通知（notify.js）
+//   /api/ai/*       … AIタブ：アプリを操作できるAI（agent.js）
 // Cron（15分ごと）… 設定時刻になったら通知を送る
 // すべての /api/* はアクセストークン（Authorization: Bearer ...）が必要。
 
 import { handleCoach, CoachError } from './coach.js';
 import { handleNotify, NotifyError, runScheduled } from './notify.js';
+import { handleAgent, AgentError } from './agent.js';
 
 const COLLS = new Set(['daily', 'hours', 'weekChecks', 'companies']);
 const MAX_CHANGES = 1000;
@@ -48,6 +50,11 @@ export default {
       const route = `${req.method} ${url.pathname}`;
       if (route === 'GET /api/ping') return json({ ok: true, now: Date.now() }, 200, cors);
       if (route === 'POST /api/sync') return json(await sync(await readJson(req), env), 200, cors);
+      if (url.pathname.startsWith('/api/ai/')) {
+        const body = req.method === 'POST' ? await readJson(req) : null;
+        const out = await handleAgent(route, url, body, env);
+        if (out) return json(out, 200, cors);
+      }
       if (url.pathname.startsWith('/api/push/')) {
         const body = req.method === 'POST' ? await readJson(req) : null;
         const out = await handleNotify(route, body, env);
@@ -60,7 +67,7 @@ export default {
       }
       throw new HttpError(404, 'not found');
     } catch (e) {
-      if (e instanceof HttpError || e instanceof CoachError || e instanceof NotifyError) return json({ error: e.message }, e.status, cors);
+      if (e instanceof HttpError || e instanceof CoachError || e instanceof NotifyError || e instanceof AgentError) return json({ error: e.message }, e.status, cors);
       console.error(e);
       return json({ error: 'server error' }, 500, cors);
     }

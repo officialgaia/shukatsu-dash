@@ -180,7 +180,7 @@ export async function runScheduled(env, now = Date.now()) {
 }
 
 // ---------- 文面 ----------
-async function loadPlan(env) {
+export async function loadPlan(env) {
   if (!env.PLAN_URL || /YOUR-GITHUB-USERNAME/.test(env.PLAN_URL)) return null;
   try {
     const res = await fetch(env.PLAN_URL, { cf: { cacheTtl: 600, cacheEverything: true } });
@@ -234,5 +234,5 @@ export function sundayMessage(plan, day) {
   for (const d of decisionsOf(plan, addDays(day, 1))) lines.push(`来週は【${d.title}】${d.text}`);
   const w = weekOf(plan, addDays(day, 1));
   if (w && w.start) lines.push(`来週（${md(w.start)}〜）：${[...(w.tocho || []), ...(w.minkan || [])].join('・')}`);
-  return { title: 'AIと振り返る', body: lines.join('\n'), url: './#/review' };
+  return { title: 'AIと振り返る', body: lines.join('\n'), url: './#/ai/review' };
 }

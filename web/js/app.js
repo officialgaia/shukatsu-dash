@@ -1,6 +1,6 @@
 import * as S from './store.js';
 import * as Sync from './sync.js';
-import { reviewView, bindReview, reviewAvailable, resetReview, setRerender } from './review.js';
+import { aiView, bindAi, enterAi, setAiRerender } from './ai.js';
 import { notifySection, installSection, bindNotify, resetNotify, setNotifyRerender, refreshSubscription, device } from './notify.js';
 import {
   today, addDays, daysBetween, mondayOf, weekDays, md, mdDow, dow, isSunday, esc, fmtH,
@@ -16,9 +16,9 @@ let recordDay = null; // 記録タブで選んでいる日
 const TABS = [
   { id: 'home', label: 'ホーム', icon: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>' },
   { id: 'record', label: '記録', icon: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>' },
+  { id: 'ai', label: 'AI', icon: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/>' },
   { id: 'weeks', label: '週チェック', icon: '<path d="M9 11l2 2 4-4"/><rect x="3" y="4" width="18" height="16" rx="2"/>' },
   { id: 'companies', label: '会社', icon: '<path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16M14 9h5a1 1 0 0 1 1 1v11M2 21h20M7 8h3M7 12h3M7 16h3"/>' },
-  { id: 'policy', label: '方針', icon: '<path d="M4 4h12l4 4v12H4zM8 10h8M8 14h8M8 18h5"/>' },
 ];
 
 // ---------- 起動 ----------
@@ -40,7 +40,7 @@ async function boot() {
   S.onChange(render);
   Sync.onStatus(renderSyncStatus);
   // 振り返り画面だけを描き直す（ほかの画面にいるときは何もしない）
-  setRerender(() => { if (route() === 'review') render(); });
+  setAiRerender(() => { if (route() === 'ai') render(); });
   setNotifyRerender(() => { if (route() === 'settings') render(); });
   render();
   Sync.init(config.apiBase);
@@ -50,8 +50,14 @@ async function boot() {
 }
 
 function route() {
-  const id = location.hash.replace(/^#\/?/, '') || 'home';
-  return [...TABS.map((t) => t.id), 'settings', 'review'].includes(id) ? id : 'home';
+  const id = location.hash.replace(/^#\/?/, '').split(/[/?]/)[0] || 'home';
+  if (id === 'review') return 'ai'; // 以前の振り返り画面は AI タブに統合
+  return [...TABS.map((t) => t.id), 'settings', 'policy'].includes(id) ? id : 'home';
+}
+
+/** '#/ai/review' の 'review' の部分 */
+function subRoute() {
+  return location.hash.replace(/^#\/?/, '').split('/')[1] || (location.hash.startsWith('#/review') ? 'review' : '');
 }
 
 function renderNav() {
@@ -66,10 +72,15 @@ function render() {
   const entering = app.dataset.route !== r;
   const keepScroll = entering ? 0 : window.scrollY;
   app.dataset.route = r;
-  if (entering && r === 'review') resetReview();
+  if (r === 'ai' && (entering || subRoute())) {
+    const sub = subRoute();
+    // '#/ai/review' は一度だけ使い、URL は '#/ai' に戻す（再読み込みで二重に送らないため）
+    if (sub) history.replaceState(null, '', `${location.pathname}${location.search}#/ai`);
+    enterAi(sub);
+  }
   if (entering && r === 'settings') resetNotify();
-  const views = { home, record, weeks, companies, policy, settings, review: () => reviewView(plan) };
-  bind.review = () => bindReview(plan);
+  const views = { home, record, weeks, companies, policy, settings, ai: aiView };
+  bind.ai = bindAi;
   app.innerHTML = views[r]();
   bind[r]?.(entering);
   window.scrollTo(0, keepScroll);
@@ -185,7 +196,7 @@ function home() {
   const dv = device();
   if (dv.ios && !dv.standalone) notices.push('<a class="notice link-row" href="#/settings">ホーム画面に追加して使ってください <span>›</span></a>');
   if (!Sync.isConfigured()) notices.push('<a class="notice link-row" href="#/settings">同期を設定する <span>›</span></a>');
-  if (reviewAvailable()) notices.push('<a class="notice link-row strong" href="#/review">AIと振り返る <span>›</span></a>');
+  if (isSunday(day)) notices.push('<a class="notice link-row strong" href="#/ai/review">AIと週の振り返りをする <span>›</span></a>');
 
   return `
     <header class="today-head">
@@ -497,10 +508,8 @@ function settings() {
     </section>
     ${notifySection()}
     ${installSection()}
-    <section class="card"><h2>AIと振り返る</h2>
-      <label class="switch-row"><span>日曜以外もボタンを出す<small>ふだんは日曜だけホームに出ます</small></span>
-        <input type="checkbox" id="anytime" ${S.getSetting('reviewAnytime', false) ? 'checked' : ''}></label>
-      <a class="link" href="#/review">振り返りの画面・履歴を開く ›</a>
+    <section class="card"><h2>計画</h2>
+      <a class="notice link-row" href="#/policy">方針・科目・1日の型を見る <span>›</span></a>
     </section>
     <section class="card"><h2>バックアップ</h2>
       <p class="muted small">記録・チェック・会社リストを JSON ファイルに書き出せます。同期していても、ときどき書き出しておくと安心です。</p>
@@ -521,7 +530,6 @@ function settings() {
 bind.settings = () => {
   renderSyncStatus();
   bindNotify();
-  $('#anytime').addEventListener('change', (e) => S.setSetting('reviewAnytime', e.target.checked));
   $('#syncNow')?.addEventListener('click', () => Sync.syncNow());
   $('#syncOff')?.addEventListener('click', () => {
     if (confirm('この端末の同期を解除しますか？（データは消えません）')) { Sync.disconnect(); render(); }
