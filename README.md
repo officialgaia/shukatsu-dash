@@ -2,6 +2,19 @@
 
 都庁試験と民間の就活を並行するための、スマホ用ダッシュボード（PWA）です。
 
+## ▶ アプリを開く
+
+**https://officialgaia.github.io/shukatsu-dash/**
+
+スマホで開いて「ホーム画面に追加」すると、アプリとして使えます（[やり方](#スマホのホーム画面に追加する)）。
+
+| | URL |
+|---|---|
+| アプリ | https://officialgaia.github.io/shukatsu-dash/ |
+| Worker（データ・AI・通知の裏方。画面はありません） | https://shukatsu-dash.shukatsu-dash-worker.workers.dev |
+| Cloudflare の管理画面 | https://dash.cloudflare.com → Workers & Pages → shukatsu-dash |
+| Claude API の管理画面（料金・キー） | https://console.anthropic.com |
+
 - `web/` … 画面（HTML/CSS/JS のみ。ビルド不要）。GitHub Pages で公開
 - `worker/` … Cloudflare Workers（データ同期・AIコーチ・プッシュ通知）
 
