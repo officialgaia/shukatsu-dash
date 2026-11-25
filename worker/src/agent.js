@@ -45,7 +45,7 @@ const SYSTEM_PROMPT = `あなたは「就活ボード」というアプリの中
 - 毎日のチェック「数的処理」「TACの講義」（set_daily_check）
 - 週ごとのやることのチェック（set_week_item）
 - 民間の会社の追加・変更（add_company / update_company / list_companies）
-- 予定（面接・説明会・ES締切・私用など何でも）の追加・変更・削除・確認（add_event / update_event / delete_event / list_events）
+- 予定・やること（面接・説明会・ES締切・勉強・私用など何でも）の追加・変更・完了・削除・確認（add_event / update_event / delete_event / list_events）。アプリでは、その日になると「今日」の一覧にチェック欄つきで並ぶ
 - 状況の確認（get_status / get_study_history）
 - 週の振り返りの保存（save_weekly_review）
 
@@ -116,7 +116,7 @@ function toolDefs(plan) {
       from: { type: 'string', format: 'date' },
       to: { type: 'string', format: 'date' },
     }),
-    t('add_event', '予定を追加する。', {
+    t('add_event', '予定・やることを追加する。その日になるとアプリの「今日」の一覧に並ぶ。', {
       date: { type: 'string', format: 'date' },
       time: nullable({ type: 'string', description: 'HH:MM（24時間）。なければ null' }),
       title: { type: 'string', description: '予定の内容（短く）' },
@@ -128,6 +128,7 @@ function toolDefs(plan) {
       time: nullable({ type: 'string', description: 'HH:MM。時刻を消すときは空文字' }),
       title: nullable({ type: 'string' }),
       memo: nullable({ type: 'string' }),
+      done: nullable({ type: 'boolean', description: '終わったら true、戻すなら false' }),
     }),
     t('delete_event', '予定を削除する。本人がはっきり消してと言ったときだけ使う。', {
       event_id: { type: 'string' },
@@ -472,7 +473,7 @@ async function runTool(name, input, ctx) {
       const id = `ev-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       const rec = { id, date, time, title, memo: input.memo ? String(input.memo).slice(0, 300) : '' };
       await putRec(env, 'events', id, rec);
-      act(`予定「${title}」を ${md(date)}${time ? ` ${time}` : ''} に追加`);
+      act(date === day ? `今日のやることに「${title}」を追加` : `${md(date)}${time ? ` ${time}` : ''} に「${title}」を追加`);
       return { ok: true, event: rec };
     }
     case 'update_event': {
@@ -483,8 +484,12 @@ async function runTool(name, input, ctx) {
       if (input.time !== null && input.time !== undefined) next.time = input.time === '' ? null : normTime(input.time);
       if (input.title) next.title = String(input.title).trim().slice(0, 100);
       if (input.memo !== null && input.memo !== undefined) next.memo = String(input.memo).slice(0, 300);
+      const doneChanged = input.done !== null && input.done !== undefined && !!input.done !== !!cur.done;
+      if (input.done !== null && input.done !== undefined) next.done = !!input.done;
       await putRec(env, 'events', cur.id, next);
-      act(`予定「${next.title}」を ${md(next.date)}${next.time ? ` ${next.time}` : ''} に変更`);
+      act(doneChanged && !input.date && !input.title && input.time == null
+        ? `「${next.title}」を${next.done ? '完了' : '未完了'}に`
+        : `予定「${next.title}」を ${md(next.date)}${next.time ? ` ${next.time}` : ''} に変更`);
       return { ok: true, event: next };
     }
     case 'delete_event': {
@@ -546,7 +551,7 @@ async function buildContext(plan, env) {
     .sort((a, b) => (a.date + (a.time || '99:99')).localeCompare(b.date + (b.time || '99:99')));
   L.push('', '## 予定（今日から2週間）');
   if (!evs.length) L.push('（なし）');
-  for (const e of evs) L.push(`- ${md(e.date)}(${DOW[dowOf(e.date)]})${e.time ? ` ${e.time}` : ''} ${e.title}${e.memo ? `（${e.memo.slice(0, 40)}）` : ''} id: ${e.id}`);
+  for (const e of evs) L.push(`- [${e.done ? 'x' : ' '}] ${md(e.date)}(${DOW[dowOf(e.date)]})${e.time ? ` ${e.time}` : ''} ${e.title}${e.memo ? `（${e.memo.slice(0, 40)}）` : ''} id: ${e.id}`);
   if (last?.next) L.push('', `## 前回の振り返り（${md(last.week)}〜の週）で決めた「来週やること」`, ...JSON.parse(last.next).map((x, i) => `${i + 1}. ${x}`));
   const qs = plan?.sundayRoutine || ['今週、数的処理を毎日やれたか', 'TACの講義が予定どおり進んだか', '新しい会社を1社探す（条件検索→四季報・OpenWorkで確認）'];
   L.push('', '## 日曜の振り返り（この順に1つずつ）', ...qs.map((q, i) => `${i + 1}. ${q}`));
@@ -574,7 +579,7 @@ function mockClaude(messages, lastRound) {
   if (/未来/.test(text)) uses.push({ type: 'tool_use', id: id(), name: 'record_study_hours', input: { date: addDays(day, 3), hours: 2, mode: 'set', tags: null } });
   if (/振り返り.*保存/.test(text)) uses.push({ type: 'tool_use', id: id(), name: 'save_weekly_review', input: { week_start: mondayOf(day), summary: 'テスト', next_actions: ['朝の数的処理を7日', 'TACを2コマ', '1社探す'] } });
   const ev = /予定.*「(.+?)」/.exec(text);
-  if (ev) uses.push({ type: 'tool_use', id: id(), name: 'add_event', input: { date: addDays(day, 2), time: '14:00', title: ev[1], memo: null } });
+  if (ev) uses.push({ type: 'tool_use', id: id(), name: 'add_event', input: { date: /今日/.test(text) ? day : addDays(day, 2), time: /今日/.test(text) ? null : '14:00', title: ev[1], memo: null } });
   if (/状況/.test(text)) uses.push({ type: 'tool_use', id: id(), name: 'get_status', input: { week_start: null } });
   if (uses.length && !lastRound) return { stop_reason: 'tool_use', content: [{ type: 'text', text: '' }, ...uses].filter((b) => b.type !== 'text' || b.text) };
   return { stop_reason: 'end_turn', content: [{ type: 'text', text: '（テスト用）こんにちは。記録や会社の追加を頼んでください。' }] };

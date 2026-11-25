@@ -1,7 +1,7 @@
 /* 就活ボード：マークシートと受験票
    ・紙は白、文字と塗りは鉛筆の黒。罫線と楕円は薄い朱で「印刷」されている
    ・チェックは楕円を鉛筆で塗る。目立たせるのはホームの受験票だけ
-   ・書体は BIZ UDPゴシック 1種類 */
+   ・書体は端末に入っている日本語ゴシック（Web フォントは読み込まない：軽さ優先） */
 :root {
   --paper: #F6F7F5;
   --white: #FFFFFF;
@@ -22,7 +22,7 @@ body {
   margin: 0;
   background: var(--paper);
   color: var(--pencil);
-  font: 16px/1.7 "BIZ UDPGothic", "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+  font: 16px/1.7 "Hiragino Sans", "Hiragino Kaku Gothic ProN", "BIZ UDPGothic", "Noto Sans JP", "Noto Sans CJK JP", "Yu Gothic UI", Meiryo, sans-serif;
   font-feature-settings: "palt" 0;
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
@@ -338,14 +338,12 @@ form + p, .btn + p, .btn-row + p, .btn.wide + p { margin-top: 12px; }
 }
 .nowrap { white-space: nowrap; }
 
-/* ---- 予定 ---- */
+/* ---- 今日の項目（予定） ---- */
 .sec > h2 button.h-link { color: var(--shu); }
-.evlist button { width: 100%; display: grid; grid-template-columns: 74px 46px 1fr; gap: 8px; align-items: baseline; text-align: left; padding: 10px 0; border-top: 1px dashed var(--rule); }
-.evlist li:first-child button { border-top: 0; }
-.ev-d { font-size: 13px; color: var(--muted); }
-.ev-d.is-today { color: var(--shu); font-weight: 700; }
-.ev-t { font-size: 14px; font-variant-numeric: tabular-nums; }
-.ev-main { min-width: 0; }
-.ev-main small { display: block; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.empty-line { padding: 8px 0; }
+.ev-row { display: flex; align-items: center; }
+.ev-row .chk { flex: 1; }
+.ev-time { font-variant-numeric: tabular-nums; margin-right: 8px; color: var(--muted); }
+.ev-edit { flex: none; font-size: 13px; color: var(--muted); padding: 12px 0 12px 12px; }
+.checks li + li.ev-row { border-top: 1px dashed var(--rule); }
+.checks li + li.ev-row .chk { border-top: 0; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

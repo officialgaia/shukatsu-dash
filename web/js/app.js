@@ -206,15 +206,18 @@ function home() {
     ${notices.join('')}
 
     <section class="sec">
-      <h2>今日</h2>
+      <h2>今日<button class="h-link" id="addEv">追加</button></h2>
       <ul class="checks">
         ${plan.dailyChecks.map((c) => `
           <li><button class="chk ${daily[c.id] ? 'on' : ''}" data-daily="${c.id}" aria-pressed="${!!daily[c.id]}">
             <span class="box" aria-hidden="true"></span><span>${esc(c.label)}</span></button></li>`).join('')}
+        ${S.listEvents(day, day).map((e) => `
+          <li class="ev-row"><button class="chk ${e.done ? 'on' : ''}" data-evdone="${esc(e.id)}" aria-pressed="${!!e.done}">
+            <span class="box" aria-hidden="true"></span><span>${e.time ? `<span class="ev-time">${esc(e.time)}</span>` : ''}${esc(e.title)}</span></button>
+            <button class="ev-edit" data-ev="${esc(e.id)}" aria-label="「${esc(e.title)}」を編集">編集</button></li>`).join('')}
       </ul>
+      <dialog id="evDlg"></dialog>
     </section>
-
-    ${eventsSection(day)}
 
     <section class="sec">
       <h2>今週<span class="h-sub">${w ? weekLabel(w) : ''}</span></h2>
@@ -231,32 +234,16 @@ function home() {
   `;
 }
 
-/** 予定：今日から7日分 */
-function eventsSection(day) {
-  const list = S.listEvents(day, addDays(day, 6));
-  const label = (d) => (d === day ? '今日' : d === addDays(day, 1) ? '明日' : mdDow(d));
-  return `<section class="sec">
-    <h2>予定<span class="h-sub">7日分</span><button class="h-link" id="addEv">追加</button></h2>
-    ${list.length ? `<ul class="evlist">${list.map((e) => `<li><button data-ev="${esc(e.id)}">
-      <span class="ev-d ${e.date === day ? 'is-today' : ''}">${label(e.date)}</span>
-      <span class="ev-t">${e.time ? esc(e.time) : ''}</span>
-      <span class="ev-main">${esc(e.title)}${e.memo ? `<small>${esc(e.memo)}</small>` : ''}</span></button></li>`).join('')}</ul>`
-      : '<p class="muted small empty-line">予定はありません。AIに「12/3 14時に面接」のように頼むこともできます。</p>'}
-    <dialog id="evDlg"></dialog>
-  </section>`;
-}
-
+/** 今日の項目を追加・編集する小さなフォーム（内容と日付だけ） */
 function eventForm(e, day) {
   const isNew = !e;
-  e = e || { title: '', date: day, time: '', memo: '' };
+  e = e || { title: '', date: day, time: '' };
   return `<form method="dialog" id="evForm">
-    <h2>${isNew ? '予定を追加' : '予定を編集'}</h2>
-    <label>内容<input name="title" required value="${esc(e.title)}" autocomplete="off" placeholder="例：三井不動産 一次面接"></label>
+    <label>${isNew ? 'やることを追加' : '編集'}<input name="title" required value="${esc(e.title)}" autocomplete="off" placeholder="例：SPIの問題集を10ページ"></label>
     <div class="row2">
       <label>日付<input type="date" name="date" required value="${esc(e.date)}"></label>
       <label>時刻（任意）<input type="time" name="time" value="${esc(e.time || '')}" step="300"></label>
     </div>
-    <label>メモ<textarea name="memo" rows="2">${esc(e.memo || '')}</textarea></label>
     <div class="dlg-actions">
       ${isNew ? '' : '<button type="button" class="btn danger" id="evDel">削除</button>'}
       <span class="spacer"></span>
@@ -284,10 +271,14 @@ function bindEvents() {
       const date = String(f.get('date'));
       if (!title || !date) return;
       dlg.close();
-      S.upsertEvent({ id: id || undefined, title, date, time: String(f.get('time') || '') || null, memo: String(f.get('memo') || '').trim() });
+      S.upsertEvent({ id: id || undefined, title, date, time: String(f.get('time') || '') || null });
     });
   };
   $('#addEv')?.addEventListener('click', () => open(null));
+  app.querySelectorAll('[data-evdone]').forEach((b) => b.addEventListener('click', () => {
+    const e = S.getEvent(b.dataset.evdone);
+    if (e) S.upsertEvent({ ...e, done: !e.done });
+  }));
   app.querySelectorAll('[data-ev]').forEach((b) => b.addEventListener('click', () => open(b.dataset.ev)));
 }
 
