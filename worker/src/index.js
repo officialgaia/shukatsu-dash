@@ -11,7 +11,7 @@ import { handleCoach, CoachError } from './coach.js';
 import { handleNotify, NotifyError, runScheduled } from './notify.js';
 import { handleAgent, AgentError } from './agent.js';
 
-const COLLS = new Set(['daily', 'hours', 'weekChecks', 'companies', 'events']);
+const COLLS = new Set(['daily', 'hours', 'weekChecks', 'companies', 'events', 'prefs']);
 const MAX_CHANGES = 1000;
 const MAX_DATA_BYTES = 4096;
 const MAX_BODY_BYTES = 1_000_000;

@@ -80,7 +80,7 @@ async function config(env) {
     settings,
     devices: n,
     planLoaded: !!plan,
-    preview: { morning: morningMessage(plan, day, await eventsOn(env, day)), sunday: sundayMessage(plan, day) },
+    preview: { morning: morningMessage(plan, day, await eventsOn(env, day), await hiddenChecks(env)), sunday: sundayMessage(plan, day) },
   };
 }
 
@@ -110,7 +110,7 @@ async function testPush(body, env) {
   if (!results.length) throw new NotifyError(404, 'この端末は通知に登録されていません');
   const plan = await loadPlan(env);
   const today = jstNow().day;
-  const msg = morningMessage(plan, today, await eventsOn(env, today));
+  const msg = morningMessage(plan, today, await eventsOn(env, today), await hiddenChecks(env));
   const out = await sendToAll(results, { ...msg, title: `【テスト】${msg.title}`, tag: 'test' }, v, env, { ttl: 600 });
   return out;
 }
@@ -170,7 +170,7 @@ export async function runScheduled(env, now = Date.now()) {
     // 先に記録を入れ、入れられたとき（＝まだ送っていない）だけ送る
     const r = await env.DB.prepare('INSERT OR IGNORE INTO notify_log (kind, day, sent_at) VALUES (?1, ?2, ?3)').bind(kind, day, now).run();
     if (!r.meta.changes) continue;
-    const msg = kind === 'morning' ? morningMessage(plan, day, await eventsOn(env, day)) : sundayMessage(plan, day);
+    const msg = kind === 'morning' ? morningMessage(plan, day, await eventsOn(env, day), await hiddenChecks(env)) : sundayMessage(plan, day);
     // 朝の通知はその日のうちだけ意味があるので、届かなければ3時間で捨てる
     const result = await sendToAll(subs, { ...msg, tag: kind }, v, env, { ttl: kind === 'morning' ? 3 * 3600 : 2 * 3600, topic: kind });
     done.push({ kind, ...result });
@@ -222,7 +222,13 @@ export async function eventsOn(env, day) {
     .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
 }
 
-export function morningMessage(plan, day, events = []) {
+/** ずっと消している毎日のチェック */
+export async function hiddenChecks(env) {
+  const r = await env.DB.prepare("SELECT data FROM records WHERE coll = 'prefs' AND key = 'dailyChecks'").first();
+  return r ? JSON.parse(r.data).hidden || [] : [];
+}
+
+export function morningMessage(plan, day, events = [], hidden = []) {
   const w = weekOf(plan, day);
   const lines = decisionsOf(plan, day).map((d) => `【${d.title}】${d.text}`);
   if (events.length) lines.push(`今日の予定：${events.map((e) => `${e.time ? `${e.time} ` : ''}${e.title}`).join('、')}`);
@@ -230,9 +236,9 @@ export function morningMessage(plan, day, events = []) {
     const tocho = (w.tocho || []).join('・');
     const minkan = (w.minkan || []).join('・');
     const theme = [tocho && `今週：${tocho}`, minkan && `民間：${minkan}`].filter(Boolean).join('／');
-    lines.push(`${theme || '今週のテーマを確認'}。今日も数的処理から`);
+    lines.push(`${theme || '今週のテーマを確認'}。${hidden.includes('suuteki') ? '' : '今日も数的処理から'}`.replace(/。$/, ''));
   } else {
-    lines.push('今日も数的処理から');
+    lines.push(hidden.includes('suuteki') ? '今日もコツコツと' : '今日も数的処理から');
   }
   return { title: titleFor(plan, day), body: lines.join('\n'), url: './#/home' };
 }

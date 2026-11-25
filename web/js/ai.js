@@ -118,6 +118,22 @@ async function openHistory() {
   rerender();
 }
 
+async function deleteChat(id, all = false) {
+  if (!confirm(all ? 'AIとの会話の履歴をすべて消しますか？元に戻せません。' : 'この会話を消しますか？元に戻せません。')) return;
+  try {
+    await Sync.call('/api/ai/delete', { method: 'POST', body: all ? { all: true } : { id } });
+    if (all || id === st.chatId) {
+      st.chatId = null;
+      st.display = [];
+      S.setSetting('aiChat', null);
+    }
+    st.history = all ? [] : st.history.filter((c) => c.id !== id);
+  } catch (e) {
+    st.error = e.message;
+  }
+  rerender();
+}
+
 async function openChat(id) {
   try {
     const c = await Sync.call(`/api/ai/chat?id=${encodeURIComponent(id)}`);
@@ -147,8 +163,10 @@ export function aiView() {
 
   if (st.view === 'history') {
     return `${head}
-      ${st.history.length ? `<ul class="hist">${st.history.map((c) => `<li><button data-chat="${esc(c.id)}">
-        <span>${esc(c.title || '（無題）')}</span><span class="muted small">${esc(c.day.slice(5).replace('-', '/'))}</span></button></li>`).join('')}</ul>`
+      ${st.history.length ? `<ul class="hist">${st.history.map((c) => `<li class="hist-row"><button data-chat="${esc(c.id)}">
+        <span>${esc(c.title || '（無題）')}</span><span class="muted small">${esc(c.day.slice(5).replace('-', '/'))}</span></button>
+        <button class="ev-edit" data-delchat="${esc(c.id)}" aria-label="この会話を消す">消す</button></li>`).join('')}</ul>
+        <button class="restore" id="aiDelAll">履歴をすべて消す</button>`
         : '<p class="muted">まだ会話がありません</p>'}
       ${st.error ? `<p class="err">${esc(st.error)}</p>` : ''}`;
   }
@@ -190,6 +208,8 @@ export function bindAi() {
     } else send(t);
   }));
   document.querySelectorAll('[data-chat]').forEach((b) => b.addEventListener('click', () => openChat(b.dataset.chat)));
+  document.querySelectorAll('[data-delchat]').forEach((b) => b.addEventListener('click', () => deleteChat(b.dataset.delchat)));
+  $('#aiDelAll')?.addEventListener('click', () => deleteChat(null, true));
   const input = $('#aiInput');
   if (input) {
     const grow = () => { input.style.height = 'auto'; input.style.height = `${Math.min(140, input.scrollHeight)}px`; };
@@ -202,6 +222,8 @@ export function bindAi() {
     });
   }
   $('#aiSend')?.addEventListener('click', () => send($('#aiInput')?.value));
-  const chat = $('#chat');
-  if (chat) chat.lastElementChild?.scrollIntoView({ block: 'end' });
+  // 画面の切り替えで一番上に戻されたあとに、最新の発言まで下げる
+  if ($('#chat') && st.view === 'chat') {
+    requestAnimationFrame(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  }
 }

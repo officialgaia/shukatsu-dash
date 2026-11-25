@@ -6,18 +6,20 @@
 //   hours:      { 'YYYY-MM-DD': { h: number, tags: string[], u } }
 //   weekChecks: { '<週開始>:<tocho|minkan|other>:<番号>': { v: bool, u } }
 //   companies:  { '<id>': { id, name, rank, stage, memo, u, del? } }
-//   events:     { '<id>': { id, date, time, title, memo, u, del? } }  … 予定
+//   events:     { '<id>': { id, date, time, title, memo, done?, u, del? } }  … 予定
+//   prefs:      { dailyChecks: { hidden: ['tac', ...], u } }  … 端末をまたいで共有する設定
+//   daily の skip: ['tac'] … その日だけ一覧から消した毎日のチェック
 //   settings:   端末だけの設定（同期しない）
 //   pending:    { '<coll>\t<key>': true } … まだ送っていない変更
 
 import { uid } from './util.js';
 
 const KEY = 'shukatsu-dash:v1';
-export const SYNC_COLLS = ['daily', 'hours', 'weekChecks', 'companies', 'events'];
+export const SYNC_COLLS = ['daily', 'hours', 'weekChecks', 'companies', 'events', 'prefs'];
 const listeners = new Set();
 
 function empty() {
-  return { daily: {}, hours: {}, weekChecks: {}, companies: {}, events: {}, settings: {}, pending: {}, seeded: false };
+  return { daily: {}, hours: {}, weekChecks: {}, companies: {}, events: {}, prefs: {}, settings: {}, pending: {}, seeded: false };
 }
 
 function load() {
@@ -81,6 +83,29 @@ export function getDaily(day) {
 export function toggleDaily(day, key) {
   const cur = state.daily[day] || {};
   put('daily', day, { ...cur, [key]: !cur[key] });
+}
+
+/** その日だけ一覧から消す／戻す */
+export function setDailySkip(day, key, skip) {
+  const cur = state.daily[day] || {};
+  const list = new Set(cur.skip || []);
+  if (skip) list.add(key); else list.delete(key);
+  put('daily', day, { ...cur, skip: [...list] });
+}
+/** ずっと消している毎日のチェック */
+export function hiddenChecks() {
+  return state.prefs?.dailyChecks?.hidden || [];
+}
+export function setCheckHidden(key, hidden) {
+  const list = new Set(hiddenChecks());
+  if (hidden) list.add(key); else list.delete(key);
+  put('prefs', 'dailyChecks', { hidden: [...list] });
+}
+/** その日にホームに出す毎日のチェック */
+export function visibleChecks(checks, day) {
+  const hidden = new Set(hiddenChecks());
+  const skip = new Set(getDaily(day).skip || []);
+  return checks.filter((c) => !hidden.has(c.id) && !skip.has(c.id));
 }
 
 // ---- 勉強時間 ----
@@ -237,7 +262,7 @@ export function resetAll() {
   const next = { ...empty(), settings: state.settings, seeded: true };
   for (const c of SYNC_COLLS) {
     for (const k of Object.keys(state[c])) {
-      next[c][k] = c === 'companies' || c === 'events' ? { id: k, del: true, u: now } : c === 'hours' ? { h: 0, tags: [], u: now } : { u: now };
+      next[c][k] = c === 'companies' || c === 'events' ? { id: k, del: true, u: now } : c === 'prefs' ? { u: now } : c === 'hours' ? { h: 0, tags: [], u: now } : { u: now };
       next.pending[`${c}\t${k}`] = true;
     }
   }

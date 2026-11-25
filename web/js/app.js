@@ -208,14 +208,16 @@ function home() {
     <section class="sec">
       <h2>今日<button class="h-link" id="addEv">追加</button></h2>
       <ul class="checks">
-        ${plan.dailyChecks.map((c) => `
-          <li><button class="chk ${daily[c.id] ? 'on' : ''}" data-daily="${c.id}" aria-pressed="${!!daily[c.id]}">
-            <span class="box" aria-hidden="true"></span><span>${esc(c.label)}</span></button></li>`).join('')}
+        ${S.visibleChecks(plan.dailyChecks, day).map((c) => `
+          <li class="ev-row"><button class="chk ${daily[c.id] ? 'on' : ''}" data-daily="${c.id}" aria-pressed="${!!daily[c.id]}">
+            <span class="box" aria-hidden="true"></span><span>${esc(c.label)}</span></button>
+            <button class="ev-edit" data-dailyoff="${c.id}" aria-label="「${esc(c.label)}」を消す">消す</button></li>`).join('')}
         ${S.listEvents(day, day).map((e) => `
           <li class="ev-row"><button class="chk ${e.done ? 'on' : ''}" data-evdone="${esc(e.id)}" aria-pressed="${!!e.done}">
             <span class="box" aria-hidden="true"></span><span>${e.time ? `<span class="ev-time">${esc(e.time)}</span>` : ''}${esc(e.title)}</span></button>
             <button class="ev-edit" data-ev="${esc(e.id)}" aria-label="「${esc(e.title)}」を編集">編集</button></li>`).join('')}
       </ul>
+      ${(daily.skip || []).length ? `<button class="restore" id="unskip">今日だけ消した項目を戻す</button>` : ''}
       <dialog id="evDlg"></dialog>
     </section>
 
@@ -275,6 +277,26 @@ function bindEvents() {
     });
   };
   $('#addEv')?.addEventListener('click', () => open(null));
+  // 毎日のチェックを消す：今日だけ／ずっと
+  app.querySelectorAll('[data-dailyoff]').forEach((b) => b.addEventListener('click', () => {
+    const id = b.dataset.dailyoff;
+    const label = plan.dailyChecks.find((c) => c.id === id)?.label || id;
+    dlg.innerHTML = `<form method="dialog" class="offform">
+      <p>「${esc(label)}」を一覧から消します。</p>
+      <button type="button" class="btn wide" data-off="day">今日だけ消す</button>
+      <button type="button" class="btn ghost wide" data-off="always">ずっと消す（設定から戻せます）</button>
+      <button type="button" class="btn ghost wide" data-off="cancel">やめる</button>
+    </form>`;
+    dlg.showModal();
+    dlg.querySelectorAll('[data-off]').forEach((x) => x.addEventListener('click', () => {
+      dlg.close();
+      if (x.dataset.off === 'day') S.setDailySkip(today(), id, true);
+      if (x.dataset.off === 'always') S.setCheckHidden(id, true);
+    }));
+  }));
+  $('#unskip')?.addEventListener('click', () => {
+    for (const id of S.getDaily(today()).skip || []) S.setDailySkip(today(), id, false);
+  });
   app.querySelectorAll('[data-evdone]').forEach((b) => b.addEventListener('click', () => {
     const e = S.getEvent(b.dataset.evdone);
     if (e) S.upsertEvent({ ...e, done: !e.done });
@@ -563,6 +585,10 @@ function settings() {
     </section>
     ${notifySection()}
     ${installSection()}
+    <section class="card"><h2>毎日のチェック</h2>
+      ${plan.dailyChecks.map((c) => `<label class="switch-row"><span>${esc(c.label)}<small>ホームの「今日」に毎日出す</small></span>
+        <input type="checkbox" data-showcheck="${c.id}" ${S.hiddenChecks().includes(c.id) ? '' : 'checked'}></label>`).join('')}
+    </section>
     <section class="card"><h2>計画</h2>
       <a class="notice link-row" href="#/policy">方針・科目・1日の型を見る <span>›</span></a>
     </section>
@@ -584,6 +610,7 @@ function settings() {
 }
 bind.settings = () => {
   renderSyncStatus();
+  app.querySelectorAll('[data-showcheck]').forEach((el) => el.addEventListener('change', () => S.setCheckHidden(el.dataset.showcheck, !el.checked)));
   bindNotify();
   $('#syncNow')?.addEventListener('click', () => Sync.syncNow());
   $('#syncOff')?.addEventListener('click', () => {

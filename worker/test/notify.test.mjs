@@ -31,6 +31,11 @@ test('朝の通知：今日の予定を時刻つきで入れる', () => {
   assert.match(m.body, /^今日の予定：10:00 説明会、ES締切\n今週：/);
 });
 
+test('朝の通知：数的処理をずっと消していれば「今日も数的処理から」を付けない', () => {
+  const m = morningMessage(plan, '2026-11-24', [], ['suuteki']);
+  assert.equal(m.body, '今週：判断推理・憲法／民間：1社追加・早期選考4社の日程確認');
+});
+
 test('plan が読めないときも送れる', () => {
   assert.deepEqual(morningMessage(null, '2026-11-24'), { title: '就活ボード', body: '今日も数的処理から', url: './#/home' });
 });

@@ -42,7 +42,7 @@ const SYSTEM_PROMPT = `あなたは「就活ボード」というアプリの中
 
 ## できること
 - 勉強時間の記録（record_study_hours）
-- 毎日のチェック「数的処理」「TACの講義」（set_daily_check）
+- 毎日のチェック「数的処理」「TACの講義」（set_daily_check）。一覧から消す・戻す（set_daily_check_visibility：その日だけ／ずっと）。「今日の数的処理を消して」はその日だけ、「数的処理はもう出さないで」はずっと。どちらか分からなければ聞く
 - 週ごとのやることのチェック（set_week_item）
 - 民間の会社の追加・変更（add_company / update_company / list_companies）
 - 予定・やること（面接・説明会・ES締切・勉強・私用など何でも）の追加・変更・完了・削除・確認（add_event / update_event / delete_event / list_events）。アプリでは、その日になると「今日」の一覧にチェック欄つきで並ぶ
@@ -90,6 +90,12 @@ function toolDefs(plan) {
       date: { type: 'string', format: 'date' },
       check: { type: 'string', enum: checkIds, description: checkIds.map((id) => `${id}=${(plan?.dailyChecks || []).find((c) => c.id === id)?.label || id}`).join(', ') },
       done: { type: 'boolean' },
+    }),
+    t('set_daily_check_visibility', '毎日のチェックを「今日」の一覧から消す／戻す。scope=day はその日だけ、always はずっと。', {
+      check: { type: 'string', enum: checkIds },
+      scope: { type: 'string', enum: ['day', 'always'] },
+      date: nullable({ type: 'string', format: 'date', description: 'scope=day のときの日付。null なら今日' }),
+      visible: { type: 'boolean', description: '消すなら false、戻すなら true' },
     }),
     t('set_week_item', '週ごとのやることのチェックを付ける／外す。item_id は get_status かデータ欄に書かれた ID。', {
       item_id: { type: 'string', description: '例：2026-11-23:minkan:0' },
@@ -146,12 +152,23 @@ export async function handleAgent(route, url, body, env) {
   if (route === 'POST /api/ai/chat') return chat(body, env);
   if (route === 'GET /api/ai/chats') return listChats(env);
   if (route === 'GET /api/ai/chat') return getChat(url.searchParams.get('id'), env);
+  if (route === 'POST /api/ai/delete') return deleteChats(body, env);
   return null;
 }
 
 async function listChats(env) {
   const { results } = await env.DB.prepare('SELECT id, day, updated, title, turns FROM chats ORDER BY updated DESC LIMIT 50').all();
   return { chats: results };
+}
+
+/** 会話の履歴を消す（{ id } で1つ、{ all: true } で全部） */
+async function deleteChats(body, env) {
+  if (body?.all === true) {
+    const r = await env.DB.prepare('DELETE FROM chats').run();
+    return { ok: true, deleted: r.meta.changes };
+  }
+  const r = await env.DB.prepare('DELETE FROM chats WHERE id = ?1').bind(String(body?.id || '')).run();
+  return { ok: true, deleted: r.meta.changes };
 }
 
 async function getChat(id, env) {
@@ -402,6 +419,25 @@ async function runTool(name, input, ctx) {
       act(`${md(input.date)} の「${label}」を${input.done ? '完了' : '未完了'}に`);
       return { ok: true };
     }
+    case 'set_daily_check_visibility': {
+      const label = (plan?.dailyChecks || []).find((c) => c.id === input.check)?.label || input.check;
+      if (input.scope === 'always') {
+        const cur = (await getRec(env, 'prefs', 'dailyChecks')) || {};
+        const hidden = new Set(cur.hidden || []);
+        if (input.visible) hidden.delete(input.check); else hidden.add(input.check);
+        await putRec(env, 'prefs', 'dailyChecks', { hidden: [...hidden] });
+        act(`「${label}」を${input.visible ? '毎日出すように戻しました' : 'ずっと消しました（設定から戻せます）'}`);
+        return { ok: true };
+      }
+      const date = input.date || day;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) throw new Error('日付は YYYY-MM-DD で指定してください');
+      const cur = (await getRec(env, 'daily', date)) || {};
+      const skip = new Set(cur.skip || []);
+      if (input.visible) skip.delete(input.check); else skip.add(input.check);
+      await putRec(env, 'daily', date, { ...cur, skip: [...skip] });
+      act(`${date === day ? '今日' : md(date)}の「${label}」を${input.visible ? '一覧に戻しました' : '一覧から消しました'}`);
+      return { ok: true };
+    }
     case 'set_week_item': {
       const m = /^(\d{4}-\d{2}-\d{2}):(tocho|minkan|other):(\d+)$/.exec(String(input.item_id));
       if (!m) throw new Error('item_id の形式が違います（例 2026-11-23:minkan:0）');
@@ -535,6 +571,11 @@ async function buildContext(plan, env) {
   if (plan?.examDate) L.push(`都庁の試験日：${plan.examDate}（あと${daysBetween(day, plan.examDate)}日）`);
   L.push('', `## 今週 ${md(mon)}〜 ${st.theme || ''}`);
   for (const it of st.items) L.push(`- [${it.done ? 'x' : ' '}] ${it.side}：${it.text}（item_id: ${it.id}）`);
+  const prefs = await getRec(env, 'prefs', 'dailyChecks');
+  const todaySkip = (await getRec(env, 'daily', day))?.skip || [];
+  const labelOf = (id) => (plan?.dailyChecks || []).find((c) => c.id === id)?.label || id;
+  if (prefs?.hidden?.length) L.push(`ずっと消している毎日のチェック：${prefs.hidden.map(labelOf).join('、')}`);
+  if (todaySkip.length) L.push(`今日だけ消している毎日のチェック：${todaySkip.map(labelOf).join('、')}`);
   L.push(`勉強時間：今週 ${st.total_hours}時間${st.target ? `（目標 ${st.target.min}〜${st.target.max}、最低 ${st.target.floor}）` : ''}`);
   for (const d of st.days.filter((x) => !x.future)) {
     L.push(`- ${md(d.date)}(${d.dow}) ${d.hours}h ${Object.entries(d.checks).map(([k, v]) => `${k}${v ? '○' : '×'}`).join(' ')}`);

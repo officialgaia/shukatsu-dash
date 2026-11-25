@@ -316,9 +316,9 @@ ol.dots { list-style: decimal; }
 .bubble.me { align-self: flex-end; background: var(--fill); padding: 8px 12px; border-radius: 3px; }
 .bubble.typing { color: var(--muted); }
 .act { font-size: 13px; color: var(--shu); margin: -4px 0; padding-left: 10px; border-left: 2px solid var(--shu); }
-.hist button { width: 100%; display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px dashed var(--rule); text-align: left; }
-.hist li:first-child button { border-top: 0; }
-.hist span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist button[data-chat] { flex: 1; min-width: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 12px 0; text-align: left; }
+.hist button[data-chat] span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist button[data-chat] span:last-child { flex: none; }
 .composer { display: flex; gap: 8px; align-items: flex-end; }
 .composer textarea {
   flex: 1; resize: none; padding: 10px 12px; font-size: 16px; line-height: 1.5;
@@ -347,3 +347,9 @@ form + p, .btn + p, .btn-row + p, .btn.wide + p { margin-top: 12px; }
 .checks li + li.ev-row { border-top: 1px dashed var(--rule); }
 .checks li + li.ev-row .chk { border-top: 0; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.restore { font-size: 13px; color: var(--shu); padding: 10px 0 0; }
+.offform p { margin-bottom: 6px; }
+.offform .btn.wide { margin-top: 8px; }
+.hist-row { display: flex; align-items: center; gap: 4px; }
+.hist li.hist-row + li.hist-row { border-top: 1px dashed var(--rule); }
+.hist + .restore { margin-top: 8px; }
