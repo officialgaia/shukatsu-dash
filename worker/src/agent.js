@@ -250,6 +250,10 @@ async function callClaude(c, context, messages, tools, env, lastRound) {
     model: c.model,
     max_tokens: 16000,
     output_config: { effort: c.effort },
+    // AI の考えた内容（thinking）は、その時の指示・ツールの一覧に結びついている。
+    // アプリを更新して指示やツールが変わると、途中の会話の古い thinking が合わなくなり 400 になる。
+    // drop_block にすると、合わなくなった thinking だけを捨てて会話を続けられる（会話の文章は残る）。
+    thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } },
     // 固定の指示 → 会話を始めた時点のデータ の順。ツール定義も含めて先頭がキャッシュされる
     system: [
       { type: 'text', text: SYSTEM_PROMPT },
@@ -260,13 +264,16 @@ async function callClaude(c, context, messages, tools, env, lastRound) {
     ...(lastRound ? { tool_choice: { type: 'none' } } : {}),
     messages,
   };
+  params.betas = ['thinking-binding-controls-2026-08-01'];
   if (FALLBACK_MODELS.has(c.model)) {
-    params.betas = ['server-side-fallback-2026-07-01'];
+    params.betas.push('server-side-fallback-2026-07-01');
     params.fallbacks = 'default';
   }
   let res;
   try {
     res = await client.beta.messages.create(params);
+    const dropped = (res.input_transformations || []).filter((t) => t.type === 'thinking_dropped');
+    if (dropped.length) console.log('thinking dropped', JSON.stringify(dropped.map((t) => t.reason)));
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) throw new AgentError(500, 'ANTHROPIC_API_KEY が正しくありません');
     if (e instanceof Anthropic.RateLimitError) throw new AgentError(503, 'AI が混み合っています。少し待ってからもう一度送ってください。');
