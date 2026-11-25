@@ -26,6 +26,11 @@ test('朝の通知：民間がない週・試験当日・試験後', () => {
   assert.match(morningMessage(plan, '2027-04-20').body, /民間を本格再開/);
 });
 
+test('朝の通知：今日の予定を時刻つきで入れる', () => {
+  const m = morningMessage(plan, '2026-11-24', [{ time: '10:00', title: '説明会' }, { time: null, title: 'ES締切' }]);
+  assert.match(m.body, /^今日の予定：10:00 説明会、ES締切\n今週：/);
+});
+
 test('plan が読めないときも送れる', () => {
   assert.deepEqual(morningMessage(null, '2026-11-24'), { title: '就活ボード', body: '今日も数的処理から', url: './#/home' });
 });

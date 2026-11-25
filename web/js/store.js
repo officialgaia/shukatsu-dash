@@ -6,17 +6,18 @@
 //   hours:      { 'YYYY-MM-DD': { h: number, tags: string[], u } }
 //   weekChecks: { '<週開始>:<tocho|minkan|other>:<番号>': { v: bool, u } }
 //   companies:  { '<id>': { id, name, rank, stage, memo, u, del? } }
+//   events:     { '<id>': { id, date, time, title, memo, u, del? } }  … 予定
 //   settings:   端末だけの設定（同期しない）
 //   pending:    { '<coll>\t<key>': true } … まだ送っていない変更
 
 import { uid } from './util.js';
 
 const KEY = 'shukatsu-dash:v1';
-export const SYNC_COLLS = ['daily', 'hours', 'weekChecks', 'companies'];
+export const SYNC_COLLS = ['daily', 'hours', 'weekChecks', 'companies', 'events'];
 const listeners = new Set();
 
 function empty() {
-  return { daily: {}, hours: {}, weekChecks: {}, companies: {}, settings: {}, pending: {}, seeded: false };
+  return { daily: {}, hours: {}, weekChecks: {}, companies: {}, events: {}, settings: {}, pending: {}, seeded: false };
 }
 
 function load() {
@@ -119,6 +120,27 @@ export function deleteCompany(id) {
   put('companies', id, { id, del: true });
 }
 
+// ---- 予定 ----
+/** from〜to（YYYY-MM-DD、両端を含む）の予定を、日付・時刻の順に */
+export function listEvents(from, to) {
+  return Object.values(state.events || {})
+    .filter((e) => !e.del && e.date >= from && e.date <= to)
+    .sort((a, b) => (a.date + (a.time || '99:99')).localeCompare(b.date + (b.time || '99:99')));
+}
+export function getEvent(id) {
+  const e = state.events?.[id];
+  return e && !e.del ? e : null;
+}
+export function upsertEvent(e) {
+  const id = e.id || uid();
+  put('events', id, { ...state.events[id], ...e, id });
+  return id;
+}
+export function deleteEvent(id) {
+  if (!state.events?.[id]) return;
+  put('events', id, { id, del: true });
+}
+
 // ---- 端末だけの設定 ----
 export function getSetting(k, dflt) {
   return k in state.settings ? state.settings[k] : dflt;
@@ -215,7 +237,7 @@ export function resetAll() {
   const next = { ...empty(), settings: state.settings, seeded: true };
   for (const c of SYNC_COLLS) {
     for (const k of Object.keys(state[c])) {
-      next[c][k] = c === 'companies' ? { id: k, del: true, u: now } : c === 'hours' ? { h: 0, tags: [], u: now } : { u: now };
+      next[c][k] = c === 'companies' || c === 'events' ? { id: k, del: true, u: now } : c === 'hours' ? { h: 0, tags: [], u: now } : { u: now };
       next.pending[`${c}\t${k}`] = true;
     }
   }

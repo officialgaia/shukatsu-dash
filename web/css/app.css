@@ -337,3 +337,15 @@ form + p, .btn + p, .btn-row + p, .btn.wide + p { margin-top: 12px; }
   * { transition: none !important; animation: none !important; }
 }
 .nowrap { white-space: nowrap; }
+
+/* ---- 予定 ---- */
+.sec > h2 button.h-link { color: var(--shu); }
+.evlist button { width: 100%; display: grid; grid-template-columns: 74px 46px 1fr; gap: 8px; align-items: baseline; text-align: left; padding: 10px 0; border-top: 1px dashed var(--rule); }
+.evlist li:first-child button { border-top: 0; }
+.ev-d { font-size: 13px; color: var(--muted); }
+.ev-d.is-today { color: var(--shu); font-weight: 700; }
+.ev-t { font-size: 14px; font-variant-numeric: tabular-nums; }
+.ev-main { min-width: 0; }
+.ev-main small { display: block; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty-line { padding: 8px 0; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

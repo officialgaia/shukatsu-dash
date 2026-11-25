@@ -2,7 +2,7 @@
 // ・オフライン表示：同じオリジンの GET は「ネット優先、つながらなければキャッシュ」。
 //   plan.json を直したときもすぐ反映され、圏外でも前回の画面が出る。
 // ・プッシュ通知：Worker から届いた通知を表示し、タップで該当の画面を開く。
-const CACHE = 'shukatsu-v7';
+const CACHE = 'shukatsu-v8';
 const FONT_CACHE = 'shukatsu-fonts-v1';
 const SHELL = [
   './',
@@ -56,7 +56,9 @@ self.addEventListener('fetch', (e) => {
   }
   if (url.origin !== self.location.origin) return;
   e.respondWith(
-    fetch(req)
+    // 毎回サーバーに確かめる（変わっていなければ 304 で軽い）。
+    // ブラウザの HTTP キャッシュに古い JS が残って、新旧のファイルが混ざるのを防ぐ
+    fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();

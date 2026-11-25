@@ -45,12 +45,15 @@ const SYSTEM_PROMPT = `あなたは「就活ボード」というアプリの中
 - 毎日のチェック「数的処理」「TACの講義」（set_daily_check）
 - 週ごとのやることのチェック（set_week_item）
 - 民間の会社の追加・変更（add_company / update_company / list_companies）
+- 予定（面接・説明会・ES締切・私用など何でも）の追加・変更・削除・確認（add_event / update_event / delete_event / list_events）
 - 状況の確認（get_status / get_study_history）
 - 週の振り返りの保存（save_weekly_review）
 
 ## 操作のルール
 - 利用者が「やった」「記録して」「追加して」など、事実や依頼をはっきり言ったら、確認を挟まずにツールで反映する。反映したら、何をしたかを1行で伝える（例：「11/25に3時間（憲法）を記録しました」）。
-- 日付を言わなければ今日のこと。「昨日」「月曜」なども今日から計算する。未来の日付には記録しない。
+- 勉強時間・チェックは、日付を言わなければ今日のこと。「昨日」「月曜」なども今日から計算する。未来の日付には記録しない。
+- 予定は未来の日付でよい。「来週の水曜」「12/3」なども今日から計算する。予定の内容は本人の言葉のまま短く書き、良し悪しを判断したり言い換えたりしない。時刻がなければ時刻なしで入れる。
+- 会社の面接や説明会の予定を入れたら、その会社の選考段階を変えるかは聞いてから。
 - 時間・会社名・どの項目かがあいまいなときだけ、短く聞き返す。推測で記録しない。
 - 頼まれていないデータは変えない。会社を消す機能はない（もう追わない会社は「C」か「見送り」にする）。
 - 「1社追加」などの週のやることが、話の流れで終わったと分かったら、その項目にもチェックを付けてよい（付けたら伝える）。
@@ -108,6 +111,26 @@ function toolDefs(plan) {
     }),
     t('get_study_history', '直近の週ごとの勉強時間の合計と目標を返す。', {
       weeks: { type: 'integer', description: '何週分（1〜12）' },
+    }),
+    t('list_events', '予定の一覧を返す（from〜to、両端を含む）。', {
+      from: { type: 'string', format: 'date' },
+      to: { type: 'string', format: 'date' },
+    }),
+    t('add_event', '予定を追加する。', {
+      date: { type: 'string', format: 'date' },
+      time: nullable({ type: 'string', description: 'HH:MM（24時間）。なければ null' }),
+      title: { type: 'string', description: '予定の内容（短く）' },
+      memo: nullable({ type: 'string' }),
+    }),
+    t('update_event', '予定を変える。変えない項目は null。', {
+      event_id: { type: 'string' },
+      date: nullable({ type: 'string', format: 'date' }),
+      time: nullable({ type: 'string', description: 'HH:MM。時刻を消すときは空文字' }),
+      title: nullable({ type: 'string' }),
+      memo: nullable({ type: 'string' }),
+    }),
+    t('delete_event', '予定を削除する。本人がはっきり消してと言ったときだけ使う。', {
+      event_id: { type: 'string' },
     }),
     t('save_weekly_review', '週の振り返りの結果を保存する。保存した「来週やること」はホームに表示される。', {
       week_start: { type: 'string', format: 'date', description: '振り返った週の月曜日' },
@@ -425,6 +448,45 @@ async function runTool(name, input, ctx) {
       }
       return { weeks };
     }
+    case 'list_events': {
+      const { results } = await env.DB.prepare("SELECT data FROM records WHERE coll = 'events'").all();
+      const list = results.map((r) => JSON.parse(r.data))
+        .filter((e) => !e.del && e.date >= String(input.from) && e.date <= String(input.to))
+        .sort((a, b) => (a.date + (a.time || '99:99')).localeCompare(b.date + (b.time || '99:99')));
+      return { events: list };
+    }
+    case 'add_event': {
+      const date = String(input.date);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日付は YYYY-MM-DD で指定してください');
+      if (daysBetween(date, day) > 60 || daysBetween(day, date) > 400) throw new Error('その日付には入れられません（60日前〜400日後まで）');
+      const time = normTime(input.time);
+      const title = String(input.title || '').trim().slice(0, 100);
+      if (!title) throw new Error('予定の内容が空です');
+      const id = `ev-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      const rec = { id, date, time, title, memo: input.memo ? String(input.memo).slice(0, 300) : '' };
+      await putRec(env, 'events', id, rec);
+      act(`予定「${title}」を ${md(date)}${time ? ` ${time}` : ''} に追加`);
+      return { ok: true, event: rec };
+    }
+    case 'update_event': {
+      const cur = await getRec(env, 'events', String(input.event_id));
+      if (!cur || cur.del) throw new Error('その ID の予定はありません（list_events で確認）');
+      const next = { ...cur };
+      if (input.date) next.date = String(input.date);
+      if (input.time !== null && input.time !== undefined) next.time = input.time === '' ? null : normTime(input.time);
+      if (input.title) next.title = String(input.title).trim().slice(0, 100);
+      if (input.memo !== null && input.memo !== undefined) next.memo = String(input.memo).slice(0, 300);
+      await putRec(env, 'events', cur.id, next);
+      act(`予定「${next.title}」を ${md(next.date)}${next.time ? ` ${next.time}` : ''} に変更`);
+      return { ok: true, event: next };
+    }
+    case 'delete_event': {
+      const cur = await getRec(env, 'events', String(input.event_id));
+      if (!cur || cur.del) throw new Error('その ID の予定はありません');
+      await putRec(env, 'events', cur.id, { id: cur.id, del: true });
+      act(`予定「${cur.title}」（${md(cur.date)}）を削除`);
+      return { ok: true };
+    }
     case 'save_weekly_review': {
       const mon = mondayOf(String(input.week_start));
       const next = (input.next_actions || []).map(String).filter(Boolean).slice(0, 3);
@@ -439,6 +501,13 @@ async function runTool(name, input, ctx) {
     default:
       throw new Error(`知らないツールです：${name}`);
   }
+}
+
+function normTime(t) {
+  if (t === null || t === undefined || t === '') return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t).trim());
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) throw new Error('時刻は HH:MM で指定してください');
+  return `${m[1].padStart(2, '0')}:${m[2]}`;
 }
 
 // ---------- 会話を始めた時点のデータ ----------
@@ -465,6 +534,12 @@ async function buildContext(plan, env) {
   L.push('', '## 民間の会社（A=今〜2月に動く / B=4月下旬以降 / C=もう追わない）');
   for (const x of companies) L.push(`- ${x.rank} ${x.name}（${x.stage}${x.memo ? `・${x.memo.slice(0, 40)}` : ''}）id: ${x.id}`);
   if (!companies.length) L.push('（まだなし）');
+  const { results: evRows } = await env.DB.prepare("SELECT data FROM records WHERE coll = 'events'").all();
+  const evs = evRows.map((r) => JSON.parse(r.data)).filter((e) => !e.del && e.date >= day && e.date <= addDays(day, 13))
+    .sort((a, b) => (a.date + (a.time || '99:99')).localeCompare(b.date + (b.time || '99:99')));
+  L.push('', '## 予定（今日から2週間）');
+  if (!evs.length) L.push('（なし）');
+  for (const e of evs) L.push(`- ${md(e.date)}(${DOW[dowOf(e.date)]})${e.time ? ` ${e.time}` : ''} ${e.title}${e.memo ? `（${e.memo.slice(0, 40)}）` : ''} id: ${e.id}`);
   if (last?.next) L.push('', `## 前回の振り返り（${md(last.week)}〜の週）で決めた「来週やること」`, ...JSON.parse(last.next).map((x, i) => `${i + 1}. ${x}`));
   const qs = plan?.sundayRoutine || ['今週、数的処理を毎日やれたか', 'TACの講義が予定どおり進んだか', '新しい会社を1社探す（条件検索→四季報・OpenWorkで確認）'];
   L.push('', '## 日曜の振り返り（この順に1つずつ）', ...qs.map((q, i) => `${i + 1}. ${q}`));
@@ -491,6 +566,8 @@ function mockClaude(messages, lastRound) {
   if (co) uses.push({ type: 'tool_use', id: id(), name: 'add_company', input: { name: co[1], rank: 'B', stage: '未エントリー', memo: null } });
   if (/未来/.test(text)) uses.push({ type: 'tool_use', id: id(), name: 'record_study_hours', input: { date: addDays(day, 3), hours: 2, mode: 'set', tags: null } });
   if (/振り返り.*保存/.test(text)) uses.push({ type: 'tool_use', id: id(), name: 'save_weekly_review', input: { week_start: mondayOf(day), summary: 'テスト', next_actions: ['朝の数的処理を7日', 'TACを2コマ', '1社探す'] } });
+  const ev = /予定.*「(.+?)」/.exec(text);
+  if (ev) uses.push({ type: 'tool_use', id: id(), name: 'add_event', input: { date: addDays(day, 2), time: '14:00', title: ev[1], memo: null } });
   if (/状況/.test(text)) uses.push({ type: 'tool_use', id: id(), name: 'get_status', input: { week_start: null } });
   if (uses.length && !lastRound) return { stop_reason: 'tool_use', content: [{ type: 'text', text: '' }, ...uses].filter((b) => b.type !== 'text' || b.text) };
   return { stop_reason: 'end_turn', content: [{ type: 'text', text: '（テスト用）こんにちは。記録や会社の追加を頼んでください。' }] };

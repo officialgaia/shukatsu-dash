@@ -80,7 +80,7 @@ async function config(env) {
     settings,
     devices: n,
     planLoaded: !!plan,
-    preview: { morning: morningMessage(plan, day), sunday: sundayMessage(plan, day) },
+    preview: { morning: morningMessage(plan, day, await eventsOn(env, day)), sunday: sundayMessage(plan, day) },
   };
 }
 
@@ -109,7 +109,8 @@ async function testPush(body, env) {
   const { results } = await (body?.endpoint ? stmt.bind(String(body.endpoint)) : stmt).all();
   if (!results.length) throw new NotifyError(404, 'この端末は通知に登録されていません');
   const plan = await loadPlan(env);
-  const msg = morningMessage(plan, jstNow().day);
+  const today = jstNow().day;
+  const msg = morningMessage(plan, today, await eventsOn(env, today));
   const out = await sendToAll(results, { ...msg, title: `【テスト】${msg.title}`, tag: 'test' }, v, env, { ttl: 600 });
   return out;
 }
@@ -169,7 +170,7 @@ export async function runScheduled(env, now = Date.now()) {
     // 先に記録を入れ、入れられたとき（＝まだ送っていない）だけ送る
     const r = await env.DB.prepare('INSERT OR IGNORE INTO notify_log (kind, day, sent_at) VALUES (?1, ?2, ?3)').bind(kind, day, now).run();
     if (!r.meta.changes) continue;
-    const msg = kind === 'morning' ? morningMessage(plan, day) : sundayMessage(plan, day);
+    const msg = kind === 'morning' ? morningMessage(plan, day, await eventsOn(env, day)) : sundayMessage(plan, day);
     // 朝の通知はその日のうちだけ意味があるので、届かなければ3時間で捨てる
     const result = await sendToAll(subs, { ...msg, tag: kind }, v, env, { ttl: kind === 'morning' ? 3 * 3600 : 2 * 3600, topic: kind });
     done.push({ kind, ...result });
@@ -214,9 +215,17 @@ function titleFor(plan, day) {
   return '就活ボード';
 }
 
-export function morningMessage(plan, day) {
+/** その日の予定（時刻順） */
+export async function eventsOn(env, day) {
+  const { results } = await env.DB.prepare("SELECT data FROM records WHERE coll = 'events'").all();
+  return results.map((r) => JSON.parse(r.data)).filter((e) => !e.del && e.date === day)
+    .sort((a, b) => (a.time || '99:99').localeCompare(b.time || '99:99'));
+}
+
+export function morningMessage(plan, day, events = []) {
   const w = weekOf(plan, day);
   const lines = decisionsOf(plan, day).map((d) => `【${d.title}】${d.text}`);
+  if (events.length) lines.push(`今日の予定：${events.map((e) => `${e.time ? `${e.time} ` : ''}${e.title}`).join('、')}`);
   if (w) {
     const tocho = (w.tocho || []).join('・');
     const minkan = (w.minkan || []).join('・');

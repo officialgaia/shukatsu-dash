@@ -196,8 +196,9 @@ export function bindAi() {
     grow();
     input.addEventListener('input', () => { st.draft = input.value; grow(); });
     input.addEventListener('keydown', (e) => {
-      // パソコンでは Enter で送信、Shift+Enter で改行（日本語変換中の Enter は除く）
-      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !('ontouchstart' in window)) { e.preventDefault(); send(input.value); }
+      // Enter は改行（日本語の変換を確定する Enter で送られてしまわないように）。
+      // 送信は「送信」ボタン。パソコンでは ⌘+Enter / Ctrl+Enter でも送れる
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); send(input.value); }
     });
   }
   $('#aiSend')?.addEventListener('click', () => send($('#aiInput')?.value));

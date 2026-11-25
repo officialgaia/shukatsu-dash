@@ -214,6 +214,8 @@ function home() {
       </ul>
     </section>
 
+    ${eventsSection(day)}
+
     <section class="sec">
       <h2>今週<span class="h-sub">${w ? weekLabel(w) : ''}</span></h2>
       ${w ? `<p class="phase">${esc(w.month)}　${esc(w.phase)}</p>` : ''}
@@ -229,6 +231,66 @@ function home() {
   `;
 }
 
+/** 予定：今日から7日分 */
+function eventsSection(day) {
+  const list = S.listEvents(day, addDays(day, 6));
+  const label = (d) => (d === day ? '今日' : d === addDays(day, 1) ? '明日' : mdDow(d));
+  return `<section class="sec">
+    <h2>予定<span class="h-sub">7日分</span><button class="h-link" id="addEv">追加</button></h2>
+    ${list.length ? `<ul class="evlist">${list.map((e) => `<li><button data-ev="${esc(e.id)}">
+      <span class="ev-d ${e.date === day ? 'is-today' : ''}">${label(e.date)}</span>
+      <span class="ev-t">${e.time ? esc(e.time) : ''}</span>
+      <span class="ev-main">${esc(e.title)}${e.memo ? `<small>${esc(e.memo)}</small>` : ''}</span></button></li>`).join('')}</ul>`
+      : '<p class="muted small empty-line">予定はありません。AIに「12/3 14時に面接」のように頼むこともできます。</p>'}
+    <dialog id="evDlg"></dialog>
+  </section>`;
+}
+
+function eventForm(e, day) {
+  const isNew = !e;
+  e = e || { title: '', date: day, time: '', memo: '' };
+  return `<form method="dialog" id="evForm">
+    <h2>${isNew ? '予定を追加' : '予定を編集'}</h2>
+    <label>内容<input name="title" required value="${esc(e.title)}" autocomplete="off" placeholder="例：三井不動産 一次面接"></label>
+    <div class="row2">
+      <label>日付<input type="date" name="date" required value="${esc(e.date)}"></label>
+      <label>時刻（任意）<input type="time" name="time" value="${esc(e.time || '')}" step="300"></label>
+    </div>
+    <label>メモ<textarea name="memo" rows="2">${esc(e.memo || '')}</textarea></label>
+    <div class="dlg-actions">
+      ${isNew ? '' : '<button type="button" class="btn danger" id="evDel">削除</button>'}
+      <span class="spacer"></span>
+      <button type="button" class="btn ghost" id="evCancel">やめる</button>
+      <button type="submit" class="btn">保存</button>
+    </div>
+  </form>`;
+}
+
+function bindEvents() {
+  const dlg = $('#evDlg');
+  if (!dlg) return;
+  const open = (id) => {
+    const e = id ? S.getEvent(id) : null;
+    dlg.innerHTML = eventForm(e, today());
+    dlg.showModal();
+    $('#evCancel', dlg).addEventListener('click', () => dlg.close());
+    $('#evDel', dlg)?.addEventListener('click', () => {
+      if (confirm(`「${e.title}」を削除しますか？`)) { dlg.close(); S.deleteEvent(id); }
+    });
+    $('#evForm', dlg).addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const f = new FormData(ev.target);
+      const title = String(f.get('title')).trim();
+      const date = String(f.get('date'));
+      if (!title || !date) return;
+      dlg.close();
+      S.upsertEvent({ id: id || undefined, title, date, time: String(f.get('time') || '') || null, memo: String(f.get('memo') || '').trim() });
+    });
+  };
+  $('#addEv')?.addEventListener('click', () => open(null));
+  app.querySelectorAll('[data-ev]').forEach((b) => b.addEventListener('click', () => open(b.dataset.ev)));
+}
+
 /** 前回の振り返りで決めた「来週やること」（今週の分だけ表示） */
 function lastReviewCard() {
   const lr = S.getSetting('lastReview', null);
@@ -240,6 +302,7 @@ function lastReviewCard() {
 
 const bind = {};
 bind.home = () => {
+  bindEvents();
   app.querySelectorAll('[data-daily]').forEach((b) => b.addEventListener('click', () => S.toggleDaily(today(), b.dataset.daily)));
   bindWeekChecks();
 };
