@@ -2,7 +2,8 @@
 // ・オフライン表示：同じオリジンの GET は「ネット優先、つながらなければキャッシュ」。
 //   plan.json を直したときもすぐ反映され、圏外でも前回の画面が出る。
 // ・プッシュ通知：Worker から届いた通知を表示し、タップで該当の画面を開く。
-const CACHE = 'shukatsu-v6';
+const CACHE = 'shukatsu-v7';
+const FONT_CACHE = 'shukatsu-fonts-v1';
 const SHELL = [
   './',
   './index.html',
@@ -31,14 +32,29 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== FONT_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  // 書体（Google Fonts）は一度取れたら使い回す。オフラインでも同じ見た目にするため
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+    e.respondWith(
+      caches.open(FONT_CACHE).then(async (c) => {
+        const hit = await c.match(req);
+        if (hit) return hit;
+        const res = await fetch(req);
+        if (res.ok || res.type === 'opaque') c.put(req, res.clone());
+        return res;
+      }),
+    );
+    return;
+  }
+  if (url.origin !== self.location.origin) return;
   e.respondWith(
     fetch(req)
       .then((res) => {

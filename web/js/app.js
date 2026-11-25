@@ -16,7 +16,7 @@ let recordDay = null; // 記録タブで選んでいる日
 const TABS = [
   { id: 'home', label: 'ホーム', icon: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>' },
   { id: 'record', label: '記録', icon: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>' },
-  { id: 'ai', label: 'AI', icon: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/>' },
+  { id: 'ai', label: 'AI', icon: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>' },
   { id: 'weeks', label: '週チェック', icon: '<path d="M9 11l2 2 4-4"/><rect x="3" y="4" width="18" height="16" rx="2"/>' },
   { id: 'companies', label: '会社', icon: '<path d="M4 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16M14 9h5a1 1 0 0 1 1 1v11M2 21h20M7 8h3M7 12h3M7 16h3"/>' },
 ];
@@ -187,9 +187,8 @@ function home() {
   const banners = activeDecisions(plan, day);
   const [, m, d] = day.split('-').map(Number);
 
-  const countdown = left > 0
-    ? `都庁まで <b>${left}</b> 日`
-    : left === 0 ? '<b>今日が本番</b>' : '試験は終了しました';
+  const [ey, em, ed] = plan.examDate.split('-').map(Number);
+  const remain = left > 0 ? `<b>${left}</b>日` : left === 0 ? '<b>本日</b>' : '終了';
 
   const notices = [];
   for (const b of banners) notices.push(`<p class="notice"><b>${esc(b.title)}</b>　${esc(b.text)}</p>`);
@@ -199,10 +198,11 @@ function home() {
   if (isSunday(day)) notices.push('<a class="notice link-row strong" href="#/ai/review">AIと週の振り返りをする <span>›</span></a>');
 
   return `
-    <header class="today-head">
-      <p class="muted">${m}月${d}日（${dow(day)}）</p>
-      <p class="countdown">${countdown}</p>
-    </header>
+    <p class="dateline">${m}月${d}日（${dow(day)}）</p>
+    <table class="ticket" aria-label="受験票">
+      <tr><th>試験</th><td colspan="3">${esc(plan.examName)}</td></tr>
+      <tr><th>試験日</th><td class="nowrap">${ey}/${em}/${ed}（${dow(plan.examDate)}）</td><th>残り</th><td class="remain">${remain}</td></tr>
+    </table>
     ${notices.join('')}
 
     <section class="sec">
@@ -215,7 +215,8 @@ function home() {
     </section>
 
     <section class="sec">
-      <h2>今週${w ? `<span class="h-sub">${weekLabel(w)}・${esc(w.phase)}</span>` : ''}</h2>
+      <h2>今週<span class="h-sub">${w ? weekLabel(w) : ''}</span></h2>
+      ${w ? `<p class="phase">${esc(w.month)}　${esc(w.phase)}</p>` : ''}
       ${w ? weekBody(w) : '<p class="muted">予定がありません</p>'}
     </section>
 
